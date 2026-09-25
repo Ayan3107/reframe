@@ -95,17 +95,19 @@ npm run build
 
 ## Deployment
 
-### Deploy on a Node.js host
+### Deploy on Render
 
-1. Push the project to GitHub and create a Node.js web service from the repository.
-2. Select Node.js 24. Set the build command to `npm ci && npm run build` and the start command to `npm run start`.
-3. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` as server-only environment variables. Do not prefix them with `NEXT_PUBLIC_`.
-4. Confirm the host allows request bodies above 10 MB, deploy, then verify records load and search works.
-5. For a clean public demo library, set `CLOUDINARY_EVIDENCE_FOLDER` to a new folder such as `reframe/hackindia-demo` before the first deployment. The default remains `reframe/evidence`, preserving the current workspace. Upload only images safe to show publicly, then verify the record, caption, available labels, quality, refresh persistence, and optimized delivery.
+The repository includes [`render.yaml`](./render.yaml), a Render Blueprint for a Node.js 24 service in Singapore. It starts with Render’s free compute plan and sets `CLOUDINARY_EVIDENCE_FOLDER` to `reframe/hackindia-demo`, keeping the public demo library separate from the local `reframe/evidence` folder.
 
-Vercel is also compatible for the demo images below its 4.5 MB function-body limit. The current 10 MB server upload route will receive a platform-level 413 for larger files on Vercel, so lower both the client and server cap to 4 MB before using that host.
+1. Push the project to GitHub, then create a Render Blueprint from that repository.
+2. During Blueprint setup, enter `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` when Render prompts for them. These values use `sync: false` and are not stored in the repo.
+3. Wait for the service to finish building, then open its `onrender.com` URL and verify records, search, and upload.
+4. The free web service spins down after 15 minutes without traffic and can take about a minute to start again. Open it shortly before the demo; upgrade the service if a warm, always-on experience is needed. Check current [free plan limitations](https://render.com/docs/free) and [pricing](https://render.com/pricing) before launch.
+5. Test an image larger than 4.5 MB on the deployed URL before promising the full 10 MB limit. The app streams uploads through its server, and platform ingress limits vary. If the host rejects that request, deploy on a host confirmed to accept 10 MB request bodies or move to a signed browser-to-Cloudinary upload flow.
 
-The demo is a single shared workspace without user accounts. The records API lists assets in the configured evidence folder, and Cloudinary delivery URLs are public. Anyone who can open the deployed demo can see those records and request signed uploads; the current app has no per-user authorization or server-side rate limiter. Use a dedicated Cloudinary account/folder containing only demo-safe material, set an account upload-size limit appropriate for the demo, and do not use private, sensitive, or personally identifying evidence. Before using RE:FRAME for private evidence, add authentication, per-user authorization, and an upload-abuse limit appropriate to the host.
+Vercel Functions have a 4.5 MB request-body limit ([official limits](https://vercel.com/docs/functions/limitations)). The current 10 MB server upload route will receive a platform-level 413 for larger files there. Use only images below the platform limit, or change the upload architecture before choosing Vercel.
+
+The demo is a single shared workspace without user accounts. The records API lists assets in the configured evidence folder, and Cloudinary delivery URLs are public. Anyone who can open the deployed demo can see those records and request uploads through the server; the current app has no per-user authorization or server-side rate limiter. Use a dedicated Cloudinary account/folder containing only demo-safe material, set an account upload-size limit appropriate for the demo, and do not use private, sensitive, or personally identifying evidence. Before using RE:FRAME for private evidence, add authentication, per-user authorization, and an upload-abuse limit appropriate to the host.
 
 ## Demo run of show (about 3 minutes)
 
