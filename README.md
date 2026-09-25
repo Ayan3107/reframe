@@ -127,7 +127,7 @@ Record the final demo only after verifying it against the deployed URL. Keep the
 - [ ] Record and publish a 2–4 minute demo video; add the link here.
 - [ ] Complete the HackIndia survey and submission form.
 - [ ] Verify the selected track(s), project description, GitHub URL, demo URL, and video URL in the submission.
-- [ ] Confirm no credentials, private user images, or local environment files are committed.
+- [x] Confirm no credentials, private user images, or local environment files are committed.
 
 See [SUBMISSION.md](./SUBMISSION.md) for a ready-to-edit project description, judging pitch, and timed demo script.
 
