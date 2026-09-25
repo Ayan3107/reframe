@@ -44,16 +44,16 @@ Show the transformed image used in the app and mention `f_auto`, `q_auto`, and s
 
 ## Release links
 
-- Public GitHub repository: **[add after publication]**
+- Public GitHub repository: [github.com/Ayan3107/reframe](https://github.com/Ayan3107/reframe)
 - Live demo: **[add after deployment]**
 - 2–4 minute demo video: **[add after recording]**
 - HackIndia submission: **[add after submission]**
 
 ## Final release checklist
 
-- [ ] Run `npm run lint` and `npm run build` on the release version.
-- [ ] Check `git status`, confirm `.env.local` is ignored, and scan tracked files for credentials.
-- [ ] Publish the source as a public GitHub repository; do not include private evidence images or credentials.
+- [x] Run `npm test`, `npm run lint`, and `npm run build` on the current release; all passed.
+- [x] Check `git status`, confirm `.env.local` is ignored, and scan tracked files for credentials; no credential matches were found.
+- [x] Publish the source as a public GitHub repository; no private evidence images or credentials are tracked.
 - [ ] Deploy with Cloudinary values configured as server-only environment variables.
 - [ ] Test the deployed URL with a non-sensitive image and verify upload, persistence, search, detail view, and optimized delivery.
 - [ ] Record a 2–4 minute demo against the deployed URL.

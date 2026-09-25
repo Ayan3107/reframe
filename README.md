@@ -122,7 +122,7 @@ Record the final demo only after verifying it against the deployed URL. Keep the
 
 ## Hackathon submission checklist
 
-- [ ] Publish this project to a public GitHub repository after the final secret scan.
+- [x] Publish the source to the [public GitHub repository](https://github.com/Ayan3107/reframe) after the final secret scan.
 - [ ] Deploy the app and add the public demo URL here.
 - [ ] Record and publish a 2–4 minute demo video; add the link here.
 - [ ] Complete the HackIndia survey and submission form.
