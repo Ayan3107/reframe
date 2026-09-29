@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  ChangeEvent,
-  DragEvent,
   useCallback,
   useEffect,
   useRef,
@@ -30,18 +28,32 @@ type RecordItem = {
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const COLLECTION_OPTIONS = ["Insurance", "Home", "Repairs", "Purchases", "Travel", "Personal", "Other"];
+
+const COLLECTION_OPTIONS = [
+  "Insurance",
+  "Home",
+  "Repairs",
+  "Purchases",
+  "Travel",
+  "Personal",
+  "Other",
+];
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
+
   if (bytes < 1024 * 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
+
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function qualityPercentage(score: number | null) {
-  if (score === null || Number.isNaN(score)) return null;
+  if (score === null || Number.isNaN(score)) {
+    return null;
+  }
+
   return Math.round(score * 100);
 }
 
@@ -54,8 +66,12 @@ function formatDate(date: string) {
 }
 
 function getRecordTitle(record: RecordItem) {
-  if (record.title?.trim()) return record.title.trim();
+  if (record.title?.trim()) {
+    return record.title.trim();
+  }
+
   const caption = record.caption?.trim();
+
   if (
     !caption ||
     caption === "No caption available." ||
@@ -66,7 +82,9 @@ function getRecordTitle(record: RecordItem) {
 
   const words = caption.split(/\s+/);
 
-  if (words.length <= 7) return caption;
+  if (words.length <= 7) {
+    return caption;
+  }
 
   return `${words.slice(0, 7).join(" ")}…`;
 }
@@ -86,39 +104,108 @@ export default function Home() {
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [selectedRecord, setSelectedRecord] =
     useState<RecordItem | null>(null);
+
   const [search, setSearch] = useState("");
-  const [activeCollection, setActiveCollection] = useState("All collections");
-  const [loadingRecords, setLoadingRecords] = useState(true);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const closeSelectedRecord = useCallback(() => setSelectedRecord(null), []);
+  const [activeCollection, setActiveCollection] =
+    useState("All collections");
+
+  const [loadingRecords, setLoadingRecords] =
+    useState(true);
+
+  const [nextCursor, setNextCursor] =
+    useState<string | null>(null);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
+
+  const [uploading, setUploading] =
+    useState(false);
+
+  const [dragging, setDragging] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [notice, setNotice] =
+    useState("");
+
+  const closeSelectedRecord = useCallback(() => {
+    setSelectedRecord(null);
+  }, []);
+
+  const normalizedSearch = normalize(search);
+
+  const filteredRecords = records.filter((record) => {
+    const searchMatches =
+      !normalizedSearch ||
+      normalize(
+        [
+          record.title,
+          record.notes,
+          record.caption,
+          record.category,
+          ...record.objects,
+        ].join(" "),
+      ).includes(normalizedSearch);
+
+    const collectionMatches =
+      activeCollection === "All collections" ||
+      (activeCollection === "Unsorted"
+        ? !record.category ||
+          record.category === "Unsorted"
+        : record.category === activeCollection);
+
+    return searchMatches && collectionMatches;
+  });
 
   useEffect(() => {
     const controller = new AbortController();
+
     const timeout = window.setTimeout(async () => {
       try {
         const params = new URLSearchParams();
-        if (search.trim()) params.set("q", search.trim());
-        if (activeCollection !== "All collections") params.set("category", activeCollection);
-        const response = await fetch(`/api/records?${params}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+
+        if (search.trim()) {
+          params.set("q", search.trim());
+        }
+
+        if (activeCollection !== "All collections") {
+          params.set("category", activeCollection);
+        }
+
+        const response = await fetch(
+          `/api/records?${params.toString()}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Failed to load visual records.");
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              "Failed to load visual records.",
+          );
+        }
+
         setRecords(data.records || []);
         setNextCursor(data.next_cursor || null);
         setError("");
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Failed to load visual records.");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load visual records.",
+          );
         }
       } finally {
-        if (!controller.signal.aborted) setLoadingRecords(false);
+        if (!controller.signal.aborted) {
+          setLoadingRecords(false);
+        }
       }
     }, 220);
 
@@ -129,19 +216,53 @@ export default function Home() {
   }, [search, activeCollection]);
 
   async function loadMoreRecords() {
-    if (!nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore) {
+      return;
+    }
+
     setLoadingMore(true);
+
     try {
-      const params = new URLSearchParams({ cursor: nextCursor });
-      if (search.trim()) params.set("q", search.trim());
-      if (activeCollection !== "All collections") params.set("category", activeCollection);
-      const response = await fetch(`/api/records?${params}`, { cache: "no-store" });
+      const params = new URLSearchParams({
+        cursor: nextCursor,
+      });
+
+      if (search.trim()) {
+        params.set("q", search.trim());
+      }
+
+      if (activeCollection !== "All collections") {
+        params.set("category", activeCollection);
+      }
+
+      const response = await fetch(
+        `/api/records?${params.toString()}`,
+        {
+          cache: "no-store",
+        },
+      );
+
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not load more records.");
-      setRecords((current) => [...current, ...(data.records || [])]);
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Could not load more records.",
+        );
+      }
+
+      setRecords((current) => [
+        ...current,
+        ...(data.records || []),
+      ]);
+
       setNextCursor(data.next_cursor || null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load more records.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load more records.",
+      );
     } finally {
       setLoadingMore(false);
     }
@@ -151,17 +272,21 @@ export default function Home() {
     setError("");
     setNotice("");
 
-    if (uploading) return;
+    if (uploading) {
+      return;
+    }
 
     if (!file.type.startsWith("image/")) {
       setError(
-        "RE:FRAME currently supports image evidence."
+        "RE:FRAME currently supports image evidence.",
       );
       return;
     }
 
     if (file.size > MAX_IMAGE_BYTES) {
-      setError("Choose an image smaller than 10 MB.");
+      setError(
+        "Choose an image smaller than 10 MB.",
+      );
       return;
     }
 
@@ -170,165 +295,182 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
+
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Upload failed.");
+        throw new Error(
+          data.error || "Upload failed.",
+        );
       }
 
-      if (data.asset) {
-        const createdRecord: RecordItem = {
-          asset_id: data.asset.asset_id,
-          public_id: data.asset.public_id,
-          secure_url: data.asset.secure_url,
-          optimized_url: data.asset.optimized_url,
-          format: data.asset.format,
-          width: data.asset.width,
-          height: data.asset.height,
-          bytes: data.asset.bytes,
-          created_at:
-            data.asset.created_at ||
-            new Date().toISOString(),
-          caption:
-            data.intelligence?.caption ||
-            "No caption available.",
-          objects:
-            data.intelligence?.objects || [],
-          quality: data.intelligence?.quality || "unknown",
-          quality_score:
-            data.intelligence?.quality_score ?? null,
-          analyzed_at:
-            data.intelligence?.analyzed_at ?? null,
-          title: data.record?.title || "",
-          notes: data.record?.notes || "",
-          category: data.record?.category || "Unsorted",
-        };
-
+      if (data.record) {
         setRecords((current) => [
-          createdRecord,
-          ...current.filter((record) => record.asset_id !== createdRecord.asset_id),
-        ].slice(0, 50));
-        setSelectedRecord(createdRecord);
+          data.record,
+          ...current.filter(
+            (record) =>
+              record.asset_id !==
+              data.record.asset_id,
+          ),
+        ]);
       }
 
-      if (data.duplicate) {
-        setNotice("This exact image is already in your visual memory. I opened its existing record without saving another copy.");
-      }
-
-      if (data.intelligence?.object_analysis_error) {
-        setError(`Image saved. COCO detection was unavailable: ${data.intelligence.object_analysis_error}`);
-      }
-      if (data.intelligence?.persistence_error) {
-        setError(`Image uploaded, but its analysis details could not be saved. ${data.intelligence.persistence_error}`);
-      }
-      if (data.intelligence?.quality_analysis_error && data.intelligence?.quality_score == null) {
-        setError(`Image saved, but quality analysis was unavailable: ${data.intelligence.quality_analysis_error}`);
-      }
+      setNotice(
+        "Evidence uploaded and saved to Cloudinary.",
+      );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Something went wrong while processing the image."
+          : "Upload failed.",
       );
     } finally {
       setUploading(false);
     }
   }
 
-  async function saveRecordDetails(
-    record: RecordItem,
-    details: { title: string; notes: string; category: string },
-  ) {
-    const response = await fetch("/api/records", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ public_id: record.public_id, ...details }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Could not save record details.");
-
-    const updated = { ...record, title: data.title, notes: data.notes, category: data.category };
-    setRecords((current) => current.map((item) =>
-      item.asset_id === updated.asset_id ? updated : item,
-    ));
-    setSelectedRecord(updated);
-  }
-
-  async function analyzeSavedRecord(record: RecordItem) {
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ public_id: record.public_id }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Could not analyze this saved image.");
-
-    const updated = { ...record, ...data.intelligence };
-    setRecords((current) => current.map((item) =>
-      item.asset_id === updated.asset_id ? updated : item,
-    ));
-    setSelectedRecord(updated);
-    return data.intelligence as {
-      object_analysis_error: string | null;
-      quality_analysis_error: string | null;
-    };
-  }
-
   function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) {
     const file = event.target.files?.[0];
 
-    if (file) uploadFile(file);
+    if (file) {
+      void uploadFile(file);
+    }
 
     event.target.value = "";
   }
 
   function handleDrop(
-    event: DragEvent<HTMLDivElement>
+    event: React.DragEvent<HTMLDivElement>,
   ) {
     event.preventDefault();
     setDragging(false);
 
     const file = event.dataTransfer.files?.[0];
 
-    if (file) uploadFile(file);
+    if (file) {
+      void uploadFile(file);
+    }
   }
 
-  const normalizedSearch = normalize(search);
+  async function saveRecordDetails(
+    record: RecordItem,
+    details: {
+      title: string;
+      notes: string;
+      category: string;
+    },
+  ) {
+    const response = await fetch("/api/records", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        asset_id: record.asset_id,
+        title: details.title,
+        notes: details.notes,
+        category: details.category,
+      }),
+    });
 
-  const searchTerms = normalizedSearch
-    .split(/\s+/)
-    .filter(Boolean);
+    const data = await response.json();
 
-  const filteredRecords =
-    searchTerms.length === 0
-      ? records
-      : records.filter((record) => {
-          const searchableText = normalize(
-            [
-              record.caption,
-              record.title,
-              record.notes,
-              record.category,
-              record.public_id,
-              `quality ${record.quality}`,
-              ...record.objects,
-            ].join(" ")
-          );
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Could not save details.",
+      );
+    }
 
-          return searchTerms.every((term) =>
-            searchableText.includes(term)
-          );
-        });
+    const updatedRecord: RecordItem =
+      data.record || {
+        ...record,
+        title: details.title,
+        notes: details.notes,
+        category: details.category,
+      };
+
+    setRecords((current) =>
+      current.map((item) =>
+        item.asset_id === record.asset_id
+          ? updatedRecord
+          : item,
+      ),
+    );
+
+    setSelectedRecord(updatedRecord);
+  }
+
+  async function analyzeSavedRecord(
+    record: RecordItem,
+  ) {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        asset_id: record.asset_id,
+        public_id: record.public_id,
+        secure_url: record.secure_url,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Could not analyze this image.",
+      );
+    }
+
+    const updatedRecord: RecordItem =
+      data.record || {
+        ...record,
+        caption:
+          data.caption || record.caption,
+        objects:
+          data.objects || record.objects,
+        quality:
+          data.quality || record.quality,
+        quality_score:
+          data.quality_score ??
+          record.quality_score,
+        analyzed_at:
+          data.analyzed_at ||
+          new Date().toISOString(),
+      };
+
+    setRecords((current) =>
+      current.map((item) =>
+        item.asset_id === record.asset_id
+          ? updatedRecord
+          : item,
+      ),
+    );
+
+    setSelectedRecord(updatedRecord);
+
+    return {
+      object_analysis_error:
+        data.object_analysis_error || null,
+      quality_analysis_error:
+        data.quality_analysis_error || null,
+    };
+  }
 
   return (
-    <main id="top" className="min-h-screen bg-[#08090b] text-white">
-      <div className="mx-auto flex min-h-screen max-w-[1500px]">
+    <main
+      id="top"
+      className="min-h-screen bg-[#08090a] text-white"
+    >
+      <div className="flex min-h-screen">
         <aside className="hidden w-[245px] shrink-0 border-r border-white/8 px-5 py-7 lg:block">
           <div className="mb-12">
             <div className="flex items-center gap-3">
@@ -349,10 +491,30 @@ export default function Home() {
           </div>
 
           <nav className="space-y-1">
-            <NavItem active href="#top" label="Visual memory" icon="◈" />
-            <NavItem href="#records" label="Records" icon="▣" />
-            <NavItem href="#collections" label="Collections" icon="□" />
-            <NavItem href="#visual-search" label="Search" icon="⌕" />
+            <NavItem
+              active
+              href="#top"
+              label="Visual memory"
+              icon="◉"
+            />
+
+            <NavItem
+              href="#records"
+              label="Records"
+              icon="▣"
+            />
+
+            <NavItem
+              href="#collections"
+              label="Collections"
+              icon="□"
+            />
+
+            <NavItem
+              href="#visual-search"
+              label="Search"
+              icon="⌕"
+            />
           </nav>
 
           <div className="absolute bottom-7 hidden w-[195px] lg:block">
@@ -391,7 +553,9 @@ export default function Home() {
               disabled={uploading}
               className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-xs font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {uploading ? "Uploading & analyzing…" : "+ Add evidence"}
+              {uploading
+                ? "Uploading & analyzing…"
+                : "+ Add evidence"}
             </button>
           </header>
 
@@ -402,7 +566,10 @@ export default function Home() {
                 Cloudinary intelligence active
               </div>
 
-              <h1 aria-label="Find anything you’ve seen." className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-6xl">
+              <h1
+                aria-label="Find anything you've seen."
+                className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-6xl"
+              >
                 Find anything you&apos;ve
                 <span className="text-white/35">
                   {" "}
@@ -447,7 +614,10 @@ export default function Home() {
                 <div className="mt-3 text-[11px] text-white/30">
                   Showing{" "}
                   <span className="text-white/60">
-                    {filteredRecords.length} {filteredRecords.length === 1 ? "result" : "results"}
+                    {filteredRecords.length}{" "}
+                    {filteredRecords.length === 1
+                      ? "result"
+                      : "results"}
                   </span>
                 </div>
               )}
@@ -455,6 +625,7 @@ export default function Home() {
 
             <section className="mt-12">
               <div id="records" />
+
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.2em] text-white/25">
@@ -469,17 +640,36 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <label id="collections" className="flex items-center gap-2 text-xs text-white/35">
+                  <label
+                    id="collections"
+                    className="flex items-center gap-2 text-xs text-white/35"
+                  >
                     Collection
+
                     <select
                       value={activeCollection}
-                      onChange={(event) => setActiveCollection(event.target.value)}
+                      onChange={(event) =>
+                        setActiveCollection(
+                          event.target.value,
+                        )
+                      }
                       className="rounded-lg border border-white/10 bg-[#111316] px-2.5 py-2 text-xs text-white/65 outline-none focus:border-white/25"
                     >
-                      <option>All collections</option>
-                      {COLLECTION_OPTIONS.map((collection) => (
-                        <option key={collection}>{collection}</option>
-                      ))}
+                      <option>
+                        All collections
+                      </option>
+
+                      {COLLECTION_OPTIONS.map(
+                        (collection) => (
+                          <option
+                            key={collection}
+                            value={collection}
+                          >
+                            {collection}
+                          </option>
+                        ),
+                      )}
+
                       <option>Unsorted</option>
                     </select>
                   </label>
@@ -504,13 +694,14 @@ export default function Home() {
                 filteredRecords.length === 0 && (
                   <div className="mt-6 rounded-3xl border border-white/8 bg-white/[0.02] p-12 text-center">
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-xl text-white/30">
-                      ◈
+                      ◉
                     </div>
 
                     <h3 className="mt-5 text-sm font-medium text-white/70">
                       {normalizedSearch
                         ? "No matching memories"
-                        : activeCollection !== "All collections"
+                        : activeCollection !==
+                            "All collections"
                           ? `No records in ${activeCollection}`
                           : "Your visual memory is empty"}
                     </h3>
@@ -518,24 +709,28 @@ export default function Home() {
                     <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-white/30">
                       {normalizedSearch
                         ? "Try a different word or search for something described in your images."
-                        : activeCollection !== "All collections"
+                        : activeCollection !==
+                            "All collections"
                           ? "Assign a record to this collection from its detail view, or choose a different collection."
                           : "Upload your first piece of visual evidence and RE:FRAME will begin understanding it."}
                     </p>
                   </div>
                 )}
 
-              {!loadingRecords && nextCursor && (
-                <div className="mt-7 flex justify-center">
-                  <button
-                    onClick={loadMoreRecords}
-                    disabled={loadingMore}
-                    className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-white/60 transition hover:border-white/20 hover:text-white disabled:opacity-50"
-                  >
-                    {loadingMore ? "Loading records…" : "Load more records"}
-                  </button>
-                </div>
-              )}
+              {!loadingRecords &&
+                nextCursor && (
+                  <div className="mt-7 flex justify-center">
+                    <button
+                      onClick={loadMoreRecords}
+                      disabled={loadingMore}
+                      className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-white/60 transition hover:border-white/20 hover:text-white disabled:opacity-50"
+                    >
+                      {loadingMore
+                        ? "Loading records…"
+                        : "Load more records"}
+                    </button>
+                  </div>
+                )}
 
               {!loadingRecords &&
                 filteredRecords.length > 0 && (
@@ -549,7 +744,7 @@ export default function Home() {
                             setSelectedRecord(record)
                           }
                         />
-                      )
+                      ),
                     )}
                   </div>
                 )}
@@ -578,12 +773,19 @@ export default function Home() {
                   ↑
                 </div>
 
-                <div className="relative mt-4 text-sm font-medium text-white/65" aria-live="polite">
-                  {uploading ? "Uploading and analyzing with Cloudinary" : "Add another visual memory"}
+                <div
+                  className="relative mt-4 text-sm font-medium text-white/65"
+                  aria-live="polite"
+                >
+                  {uploading
+                    ? "Uploading and analyzing with Cloudinary"
+                    : "Add another visual memory"}
                 </div>
 
                 <div className="relative mt-2 text-xs text-white/25">
-                  {uploading ? "Your original image is being stored and analyzed." : "Drop an image here or click to browse"}
+                  {uploading
+                    ? "Your original image is being stored and analyzed."
+                    : "Drop an image here or click to browse"}
                 </div>
               </div>
             </section>
@@ -593,8 +795,12 @@ export default function Home() {
                 {error}
               </div>
             )}
+
             {notice && (
-              <div role="status" className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-xs text-emerald-200/80">
+              <div
+                role="status"
+                className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-xs text-emerald-200/80"
+              >
                 {notice}
               </div>
             )}
@@ -613,8 +819,15 @@ export default function Home() {
       {selectedRecord && (
         <RecordModal
           record={selectedRecord}
-          onSave={(details) => saveRecordDetails(selectedRecord, details)}
-          onAnalyze={() => analyzeSavedRecord(selectedRecord)}
+          onSave={(details) =>
+            saveRecordDetails(
+              selectedRecord,
+              details,
+            )
+          }
+          onAnalyze={() =>
+            analyzeSavedRecord(selectedRecord)
+          }
           onClose={closeSelectedRecord}
         />
       )}
@@ -630,7 +843,7 @@ function RecordCard({
   onClick: () => void;
 }) {
   const percentage = qualityPercentage(
-    record.quality_score
+    record.quality_score,
   );
 
   return (
@@ -639,10 +852,12 @@ function RecordCard({
       className="group overflow-hidden rounded-3xl border border-white/8 bg-white/[0.02] text-left transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-black">
-        {/* Cloudinary delivers f_auto/q_auto transformed image URLs here. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary optimizes delivery with f_auto/q_auto. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={record.optimized_url || record.secure_url}
+          src={
+            record.optimized_url ||
+            record.secure_url
+          }
           alt={record.caption}
           className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
         />
@@ -667,6 +882,7 @@ function RecordCard({
           <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-1 text-[9px] text-white/35">
             {record.category || "Unsorted"}
           </span>
+
           {record.objects
             .slice(0, 4)
             .map((object) => (
@@ -680,7 +896,9 @@ function RecordCard({
 
           {record.objects.length === 0 && (
             <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-1 text-[9px] text-white/25">
-              {record.analyzed_at ? "No labels returned" : "Needs analysis"}
+              {record.analyzed_at
+                ? "No labels returned"
+                : "Needs analysis"}
             </span>
           )}
         </div>
@@ -706,45 +924,84 @@ function RecordModal({
   onClose,
 }: {
   record: RecordItem;
-  onSave: (details: { title: string; notes: string; category: string }) => Promise<void>;
+
+  onSave: (details: {
+    title: string;
+    notes: string;
+    category: string;
+  }) => Promise<void>;
+
   onAnalyze: () => Promise<{
     object_analysis_error: string | null;
     quality_analysis_error: string | null;
   }>;
+
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+
   const percentage = qualityPercentage(
-    record.quality_score
+    record.quality_score,
   );
-  const [title, setTitle] = useState(record.title || "");
-  const [notes, setNotes] = useState(record.notes || "");
+
+  const [title, setTitle] = useState(
+    record.title || "",
+  );
+
+  const [notes, setNotes] = useState(
+    record.notes || "",
+  );
+
   const [category, setCategory] = useState(
-    record.category === "Unsorted" ? "" : record.category || "",
+    record.category === "Unsorted"
+      ? ""
+      : record.category || "",
   );
-  const [savingDetails, setSavingDetails] = useState(false);
-  const [detailsMessage, setDetailsMessage] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisMessage, setAnalysisMessage] = useState("");
+
+  const [savingDetails, setSavingDetails] =
+    useState(false);
+
+  const [detailsMessage, setDetailsMessage] =
+    useState("");
+
+  const [analyzing, setAnalyzing] =
+    useState(false);
+
+  const [analysisMessage, setAnalysisMessage] =
+    useState("");
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
     dialogRef.current?.focus();
 
-    function keepKeyboardFocus(event: KeyboardEvent) {
+    function keepKeyboardFocus(
+      event: KeyboardEvent,
+    ) {
       if (event.key === "Escape") {
         onClose();
         return;
       }
-      if (event.key !== "Tab") return;
+
+      if (event.key !== "Tab") {
+        return;
+      }
 
       const dialog = dialogRef.current;
-      if (!dialog) return;
-      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-      ));
+
+      if (!dialog) {
+        return;
+      }
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+
       if (focusable.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -752,19 +1009,36 @@ function RecordModal({
       }
 
       const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      const last =
+        focusable[focusable.length - 1];
+
+      if (
+        event.shiftKey &&
+        (document.activeElement === first ||
+          document.activeElement === dialog)
+      ) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (
+        !event.shiftKey &&
+        document.activeElement === last
+      ) {
         event.preventDefault();
         first.focus();
       }
     }
 
-    document.addEventListener("keydown", keepKeyboardFocus);
+    document.addEventListener(
+      "keydown",
+      keepKeyboardFocus,
+    );
+
     return () => {
-      document.removeEventListener("keydown", keepKeyboardFocus);
+      document.removeEventListener(
+        "keydown",
+        keepKeyboardFocus,
+      );
+
       previouslyFocused?.focus();
     };
   }, [onClose]);
@@ -772,11 +1046,23 @@ function RecordModal({
   async function handleSaveDetails() {
     setSavingDetails(true);
     setDetailsMessage("");
+
     try {
-      await onSave({ title, notes, category });
-      setDetailsMessage("Saved to this Cloudinary record.");
+      await onSave({
+        title,
+        notes,
+        category,
+      });
+
+      setDetailsMessage(
+        "Saved to this Cloudinary record.",
+      );
     } catch (error) {
-      setDetailsMessage(error instanceof Error ? error.message : "Could not save details.");
+      setDetailsMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save details.",
+      );
     } finally {
       setSavingDetails(false);
     }
@@ -785,20 +1071,38 @@ function RecordModal({
   async function handleAnalyze() {
     setAnalyzing(true);
     setAnalysisMessage("");
+
     try {
       const result = await onAnalyze();
-      const failures = [result.object_analysis_error, result.quality_analysis_error].filter(Boolean);
+
+      const failures = [
+        result.object_analysis_error,
+        result.quality_analysis_error,
+      ].filter(Boolean);
+
       setAnalysisMessage(
         failures.length > 0
           ? `Saved what Cloudinary returned. ${failures.join(" ")}`
           : "Analysis saved to this Cloudinary record.",
       );
     } catch (error) {
-      setAnalysisMessage(error instanceof Error ? error.message : "Could not analyze this image.");
+      setAnalysisMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not analyze this image.",
+      );
     } finally {
       setAnalyzing(false);
     }
   }
+
+  const detailsChanged =
+    title !== (record.title || "") ||
+    notes !== (record.notes || "") ||
+    category !==
+      (record.category === "Unsorted"
+        ? ""
+        : record.category || "");
 
   return (
     <div
@@ -837,9 +1141,12 @@ function RecordModal({
 
         <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
           <div className="flex min-h-[350px] items-center justify-center bg-black p-4 lg:min-h-[600px]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Cloudinary optimizes delivery with f_auto/q_auto. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={record.optimized_url || record.secure_url}
+              src={
+                record.optimized_url ||
+                record.secure_url
+              }
               alt={record.caption}
               className="max-h-[70vh] max-w-full rounded-xl object-contain"
             />
@@ -850,7 +1157,8 @@ function RecordModal({
               AI intelligence
             </div>
 
-            {(!record.analyzed_at || analysisMessage) && (
+            {(!record.analyzed_at ||
+              analysisMessage) && (
               <div className="mt-4 rounded-xl border border-white/8 bg-white/[0.025] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs leading-5 text-white/40">
@@ -858,18 +1166,25 @@ function RecordModal({
                       ? "This saved image has no analysis record yet. Analyze it without uploading it again."
                       : "Analysis details were updated on the saved Cloudinary asset."}
                   </p>
+
                   {!record.analyzed_at && (
                     <button
                       onClick={handleAnalyze}
                       disabled={analyzing}
                       className="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-xs text-white/70 transition hover:border-white/30 hover:text-white disabled:opacity-50"
                     >
-                      {analyzing ? "Analyzing saved image…" : "Analyze saved image"}
+                      {analyzing
+                        ? "Analyzing saved image…"
+                        : "Analyze saved image"}
                     </button>
                   )}
                 </div>
+
                 {analysisMessage && (
-                  <p aria-live="polite" className="mt-2 text-[11px] text-white/45">
+                  <p
+                    aria-live="polite"
+                    className="mt-2 text-[11px] text-white/45"
+                  >
                     {analysisMessage}
                   </p>
                 )}
@@ -890,58 +1205,101 @@ function RecordModal({
               <div className="text-[9px] uppercase tracking-[0.18em] text-white/25">
                 Your context
               </div>
-              <label className="mt-3 block text-xs text-white/50" htmlFor="record-title">
+
+              <label
+                className="mt-3 block text-xs text-white/50"
+                htmlFor="record-title"
+              >
                 Record title
               </label>
+
               <input
                 id="record-title"
                 value={title}
-                onChange={(event) => setTitle(event.target.value)}
+                onChange={(event) =>
+                  setTitle(event.target.value)
+                }
                 maxLength={120}
                 placeholder="e.g. Phone damage from October delivery"
                 className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/25"
               />
-              <label className="mt-4 block text-xs text-white/50" htmlFor="record-notes">
+
+              <label
+                className="mt-4 block text-xs text-white/50"
+                htmlFor="record-notes"
+              >
                 Notes
               </label>
+
               <textarea
                 id="record-notes"
                 value={notes}
-                onChange={(event) => setNotes(event.target.value)}
+                onChange={(event) =>
+                  setNotes(event.target.value)
+                }
                 maxLength={900}
                 rows={3}
                 placeholder="Add the details you will want to remember later."
                 className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-sm leading-5 text-white outline-none placeholder:text-white/20 focus:border-white/25"
               />
-              <div className="mt-1 text-right text-[10px] text-white/25" aria-live="polite">
+
+              <div
+                className="mt-1 text-right text-[10px] text-white/25"
+                aria-live="polite"
+              >
                 {notes.length}/900
               </div>
-              <label className="mt-4 block text-xs text-white/50" htmlFor="record-collection">
+
+              <label
+                className="mt-4 block text-xs text-white/50"
+                htmlFor="record-collection"
+              >
                 Collection
               </label>
+
               <select
                 id="record-collection"
                 value={category}
-                onChange={(event) => setCategory(event.target.value)}
+                onChange={(event) =>
+                  setCategory(event.target.value)
+                }
                 className="mt-2 w-full rounded-xl border border-white/10 bg-[#111316] px-3 py-2.5 text-sm text-white outline-none focus:border-white/25"
               >
-                <option value="">Unsorted</option>
-                {COLLECTION_OPTIONS.map((collection) => (
-                  <option key={collection} value={collection}>{collection}</option>
-                ))}
+                <option value="">
+                  Unsorted
+                </option>
+
+                {COLLECTION_OPTIONS.map(
+                  (collection) => (
+                    <option
+                      key={collection}
+                      value={collection}
+                    >
+                      {collection}
+                    </option>
+                  ),
+                )}
               </select>
+
               <div className="mt-3 flex items-center justify-between gap-3">
-                <p aria-live="polite" className="text-[11px] text-white/45">{detailsMessage}</p>
+                <p
+                  aria-live="polite"
+                  className="text-[11px] text-white/45"
+                >
+                  {detailsMessage}
+                </p>
+
                 <button
                   onClick={handleSaveDetails}
-                  disabled={savingDetails || (
-                    title === (record.title || "") &&
-                    notes === (record.notes || "") &&
-                    category === (record.category === "Unsorted" ? "" : record.category || "")
-                  )}
+                  disabled={
+                    savingDetails ||
+                    !detailsChanged
+                  }
                   className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {savingDetails ? "Saving…" : "Save details"}
+                  {savingDetails
+                    ? "Saving…"
+                    : "Save details"}
                 </button>
               </div>
             </div>
@@ -961,7 +1319,7 @@ function RecordModal({
                       >
                         {object}
                       </span>
-                    )
+                    ),
                   )
                 ) : (
                   <span className="text-xs text-white/30">

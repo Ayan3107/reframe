@@ -19,6 +19,12 @@ function asObject(value: unknown): JsonObject {
     : {};
 }
 
+function customContext(value: unknown): JsonObject {
+  const context = asObject(value);
+  const custom = asObject(context.custom);
+  return Object.keys(custom).length > 0 ? custom : context;
+}
+
 function stringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
@@ -35,6 +41,7 @@ function parseObjects(value: unknown): string[] {
       return parsed.filter((item): item is string => typeof item === "string");
     }
   } catch {
+    if (value.trimStart().startsWith("[")) return [];
     // Support assets that predate the JSON metadata format.
   }
 
@@ -114,14 +121,22 @@ export async function GET(request: Request) {
     const result = await search.execute();
 
     const records = (result.resources as JsonObject[]).map((resource) => {
-      const context = asObject(resource.context);
+      const context = customContext(resource.context);
       const metadata = asObject(resource.metadata);
       const assetTags = filterCloudinaryObjectLabels(resource.tags);
       const savedObjects = filterCloudinaryObjectLabels(parseObjects(context.reframe_objects));
       const rawScore = context.reframe_quality_score;
-      const score = rawScore === "" || rawScore === undefined
+      const parsedScore = rawScore === "" || rawScore === undefined || rawScore === null
         ? null
         : Number(rawScore);
+      const score = parsedScore !== null && Number.isFinite(parsedScore) ? parsedScore : null;
+      const storedQuality = stringValue(context.reframe_quality);
+      const quality = score !== null
+        ? score >= 0.75 ? "high" : score >= 0.5 ? "medium" : "low"
+        : storedQuality === "high" || storedQuality === "medium" || storedQuality === "low"
+          ? storedQuality
+          : "unknown";
+      const objects = savedObjects.length > 0 ? savedObjects : assetTags;
 
       return {
         asset_id: stringValue(resource.asset_id),
@@ -142,9 +157,9 @@ export async function GET(request: Request) {
         notes: stringValue(context.reframe_notes),
         category: stringValue(context.reframe_category, "Unsorted") || "Unsorted",
         caption: stringValue(context.reframe_caption, "No caption available."),
-        objects: savedObjects.length > 0 ? savedObjects : assetTags,
-        quality: stringValue(context.reframe_quality, "unknown"),
-        quality_score: score !== null && Number.isFinite(score) ? score : null,
+        objects,
+        quality,
+        quality_score: score,
         analyzed_at: stringValue(context.reframe_analyzed_at) || null,
         tags: assetTags,
         metadata,

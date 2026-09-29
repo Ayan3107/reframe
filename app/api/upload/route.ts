@@ -36,6 +36,43 @@ function storedObjects(value: unknown): string[] {
   return [];
 }
 
+function storedQuality(value: unknown, score: number | null): "high" | "medium" | "low" | "unknown" {
+  if (score !== null) {
+    return score >= 0.75 ? "high" : score >= 0.5 ? "medium" : "low";
+  }
+  return value === "high" || value === "medium" || value === "low" ? value : "unknown";
+}
+
+function numericScore(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const score = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
+function customContext(value: unknown): JsonObject {
+  const context = asObject(value);
+  const custom = asObject(context.custom);
+  return Object.keys(custom).length > 0 ? custom : context;
+}
+
+function makeRecord(asset: ReturnType<typeof responseAsset>, intelligence: {
+  caption: string;
+  objects: string[];
+  quality: string;
+  quality_score: number | null;
+  analyzed_at: string | null;
+}, details: { title: string; notes: string; category: string }) {
+  return {
+    ...asset,
+    ...details,
+    caption: intelligence.caption,
+    objects: intelligence.objects,
+    quality: intelligence.quality,
+    quality_score: intelligence.quality_score,
+    analyzed_at: intelligence.analyzed_at,
+  };
+}
+
 function responseAsset(resource: JsonObject, publicId: string) {
   return {
     asset_id: stringValue(resource.asset_id),
@@ -137,37 +174,48 @@ export async function POST(request: Request) {
     const publicId = stringValue(uploadResult.public_id, `${folder}/${contentAddress}`);
 
     if (isExistingUpload(uploadResult)) {
-      const existingAsset = asObject(await cloudinary.api.resource(publicId, {
-        context: true,
-        tags: true,
-      }));
-      const context = asObject(existingAsset.context);
+      let existingAsset = uploadResult;
+      try {
+        existingAsset = asObject(await cloudinary.api.resource(publicId, {
+          context: true,
+          tags: true,
+        }));
+      } catch (error) {
+        console.error("RE:FRAME duplicate metadata lookup failed:", safeServerError(error));
+      }
+      const context = customContext(existingAsset.context);
       const tags = filterCloudinaryObjectLabels(existingAsset.tags);
       const objects = storedObjects(context.reframe_objects);
       const rawScore = context.reframe_quality_score;
-      const parsedScore = rawScore === "" || rawScore === undefined ? null : Number(rawScore);
-      const score = parsedScore !== null && Number.isFinite(parsedScore) ? parsedScore : null;
+      const score = numericScore(rawScore);
+      const caption = stringValue(context.reframe_caption, extractCaption(existingAsset));
+      const quality = storedQuality(context.reframe_quality, score);
+      const analyzedAt = stringValue(context.reframe_analyzed_at) || null;
+      const resolvedObjects = objects.length > 0 ? objects : tags;
+      const recordDetails = {
+        title: stringValue(context.reframe_title),
+        notes: stringValue(context.reframe_notes),
+        category: stringValue(context.reframe_category, "Unsorted") || "Unsorted",
+      };
+      const intelligence = {
+        caption,
+        objects: resolvedObjects,
+        object_count: resolvedObjects.length,
+        object_analysis_error: null,
+        quality_analysis_error: null,
+        quality,
+        quality_score: score,
+        persistence_error: null,
+        analyzed_at: analyzedAt,
+      };
+      const asset = responseAsset(existingAsset, publicId);
 
       return NextResponse.json({
         success: true,
         duplicate: true,
-        asset: responseAsset(existingAsset, publicId),
-        record: {
-          title: stringValue(context.reframe_title),
-          notes: stringValue(context.reframe_notes),
-          category: stringValue(context.reframe_category, "Unsorted") || "Unsorted",
-        },
-        intelligence: {
-          caption: stringValue(context.reframe_caption, "No caption available."),
-          objects: objects.length > 0 ? objects : tags,
-          object_count: objects.length > 0 ? objects.length : tags.length,
-          object_analysis_error: null,
-          quality_analysis_error: null,
-          quality: stringValue(context.reframe_quality, "unknown"),
-          quality_score: score,
-          persistence_error: null,
-          analyzed_at: stringValue(context.reframe_analyzed_at) || null,
-        },
+        asset,
+        record: makeRecord(asset, intelligence, recordDetails),
+        intelligence,
       });
     }
 
@@ -190,18 +238,20 @@ export async function POST(request: Request) {
 
     let qualityAnalysisError: string | null = null;
     let quality = extractQuality(uploadResult);
-    try {
-      const result = await cloudinary.api.update(publicId, {
-        type: "upload",
-        detection: "iqa",
-      });
-      const iqaQuality = extractQuality(asObject(result));
-      if (iqaQuality.score !== null || iqaQuality.quality !== "unknown") {
-        quality = iqaQuality;
+    if (quality.score === null) {
+      try {
+        const result = await cloudinary.api.update(publicId, {
+          type: "upload",
+          detection: "iqa",
+        });
+        const iqaQuality = extractQuality(asObject(result));
+        if (iqaQuality.score !== null || iqaQuality.quality !== "unknown") {
+          quality = iqaQuality;
+        }
+      } catch (error) {
+        qualityAnalysisError = "Cloudinary could not return an image quality score.";
+        console.error("RE:FRAME IQA analysis failed:", safeServerError(error));
       }
-    } catch (error) {
-      qualityAnalysisError = "Cloudinary could not return an image quality score.";
-      console.error("RE:FRAME IQA analysis failed:", safeServerError(error));
     }
 
     const analyzedAt = new Date().toISOString();
@@ -211,16 +261,19 @@ export async function POST(request: Request) {
         context: Record<string, string>,
         publicIds: string[],
       ) => Promise<unknown>;
+      const persistedContext: Record<string, string> = {
+        reframe_type: "visual_record",
+        reframe_caption: caption.slice(0, 450),
+        reframe_objects: JSON.stringify(objects),
+        reframe_quality: quality.quality,
+        reframe_analyzed_at: analyzedAt,
+        reframe_category: "Unsorted",
+      };
+      if (quality.score !== null) {
+        persistedContext.reframe_quality_score = String(quality.score);
+      }
       await addContext(
-        {
-          reframe_type: "visual_record",
-          reframe_caption: caption.slice(0, 450),
-          reframe_objects: JSON.stringify(objects),
-          reframe_quality: quality.quality,
-          reframe_quality_score: quality.score?.toString() ?? "",
-          reframe_analyzed_at: analyzedAt,
-          reframe_category: "Unsorted",
-        },
+        persistedContext,
         [publicId],
       );
     } catch (error) {
@@ -228,20 +281,29 @@ export async function POST(request: Request) {
       console.error("RE:FRAME record metadata save failed:", safeServerError(error));
     }
 
+    const intelligence = {
+      caption,
+      objects,
+      object_count: objects.length,
+      object_analysis_error: objectAnalysisError,
+      quality_analysis_error: qualityAnalysisError,
+      quality: quality.quality,
+      quality_score: quality.score,
+      persistence_error: persistenceError,
+      analyzed_at: analyzedAt,
+    };
+    const record = makeRecord(asset, intelligence, {
+      title: "",
+      notes: "",
+      category: "Unsorted",
+    });
+
     return NextResponse.json({
       success: true,
+      duplicate: false,
       asset,
-      intelligence: {
-        caption,
-        objects,
-        object_count: objects.length,
-        object_analysis_error: objectAnalysisError,
-        quality_analysis_error: qualityAnalysisError,
-        quality: quality.quality,
-        quality_score: quality.score,
-        persistence_error: persistenceError,
-        analyzed_at: analyzedAt,
-      },
+      record,
+      intelligence,
     });
   } catch (error) {
     console.error("RE:FRAME upload error:", safeServerError(error));
