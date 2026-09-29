@@ -95,19 +95,26 @@ npm run build
 
 ## Deployment
 
-### Deploy on Render
+### Deploy on Vercel
 
-The repository includes [`render.yaml`](./render.yaml), a Render Blueprint for a Node.js 24 service in Singapore. It starts with Render’s free compute plan and sets `CLOUDINARY_EVIDENCE_FOLDER` to `reframe/hackindia-demo`, keeping the public demo library separate from the local `reframe/evidence` folder.
+The current public demo is deployed on Vercel:
 
-1. Push the project to GitHub, then create a Render Blueprint from that repository.
-2. During Blueprint setup, enter `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` when Render prompts for them. These values use `sync: false` and are not stored in the repo.
-3. Wait for the service to finish building, then open its `onrender.com` URL and verify records, search, and upload.
-4. The free web service spins down after 15 minutes without traffic and can take about a minute to start again. Open it shortly before the demo; upgrade the service if a warm, always-on experience is needed. Check current [free plan limitations](https://render.com/docs/free) and [pricing](https://render.com/pricing) before launch.
-5. Test an image larger than 4.5 MB on the deployed URL before promising the full 10 MB limit. The app streams uploads through its server, and platform ingress limits vary. If the host rejects that request, deploy on a host confirmed to accept 10 MB request bodies or move to a signed browser-to-Cloudinary upload flow.
+**Live demo:** https://reframe-ebon.vercel.app/
 
-Vercel Functions have a 4.5 MB request-body limit ([official limits](https://vercel.com/docs/functions/limitations)). The current 10 MB server upload route will receive a platform-level 413 for larger files there. Use only images below the platform limit, or change the upload architecture before choosing Vercel.
+The production deployment uses a dedicated Cloudinary evidence folder, `reframe/hackindia-demo`, so the public demo starts with a clean media library separate from local development/test assets.
 
-The demo is a single shared workspace without user accounts. The records API lists assets in the configured evidence folder, and Cloudinary delivery URLs are public. Anyone who can open the deployed demo can see those records and request uploads through the server; the current app has no per-user authorization or server-side rate limiter. Use a dedicated Cloudinary account/folder containing only demo-safe material, set an account upload-size limit appropriate for the demo, and do not use private, sensitive, or personally identifying evidence. Before using RE:FRAME for private evidence, add authentication, per-user authorization, and an upload-abuse limit appropriate to the host.
+Required production environment variables:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_EVIDENCE_FOLDER`
+
+Keep all Cloudinary credentials in the deployment platform's environment-variable settings. Never commit `.env.local` or Cloudinary API secrets to GitHub.
+
+The deployed app is a single shared demo workspace without user accounts. Use demo-safe images only.
+
+Vercel Functions have a 4.5 MB request-body limit. The current server upload route is designed for images up to 10 MB, so the deployed Vercel demo should use images below Vercel's request limit. A future signed browser-to-Cloudinary upload flow can remove that platform bottleneck.
 
 ## Demo run of show (about 3 minutes)
 
